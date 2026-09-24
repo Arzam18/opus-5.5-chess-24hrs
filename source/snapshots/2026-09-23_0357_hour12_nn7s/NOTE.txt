@@ -1,0 +1,1 @@
+nn7s = net7 + search params LMP base 5, SE depth 6, aspiration 12 (defaults). Gauntlet4 @10+0.1: c2(=this) +16 vs nn7 (270 g); gauntlet3 @5+0.05 each param positive. Installed in final/.

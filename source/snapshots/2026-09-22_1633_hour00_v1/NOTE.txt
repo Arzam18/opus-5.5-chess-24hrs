@@ -1,0 +1,1 @@
+v1: PeSTO eval + PVS/NMP/LMR/RFP/probcut/SE search. vs stash21 10+0.1: ~+265 Elo (82%, 100 games).

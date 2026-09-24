@@ -1,0 +1,1 @@
+nn3b = net3b (256, lambda 0.9, 7.5M HCE+11.4M nn1+4M nn2). RR @10+0.1 ~120g each: nn3b +144, nn3a(l=0.7) -21, nn2 -123. Installed in final/. Src includes optional king buckets (NNUE_KB, default 1).

@@ -1,0 +1,1 @@
+tm2 = net5a + LMR(1.0/2.0) + insufficient-material draws + TM fix (overhead reserved per remaining move, clock from go receipt, inc frac 0.9). Old TM: 9/20 time forfeits at 2+0.02 (1-6ms overruns); new: 0/30 at 2+0.02, 0/20 at 1+0.01. Installed in final/.

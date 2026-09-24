@@ -1,0 +1,1 @@
+nn4a = net4a (256, lambda 1.0, all 29.7M) + PV-print fix; npcorr off. vs nn3b +28+-26 (300g 10+0.1). nn4b (512, l0.9) -24+-37 (160g) rejected. Installed in final/.

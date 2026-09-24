@@ -1,0 +1,1 @@
+nn7 = tm2 code (TM fix, LMR, insuff. material, Hash default 256) + net7 (256, lambda 1.0, 14 ep, 54.5M nn1-nn5). vs tm2: +44+-25 (240 g, 10+0.1). Installed in final/.

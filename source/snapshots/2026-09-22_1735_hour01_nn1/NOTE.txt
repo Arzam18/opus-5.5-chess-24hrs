@@ -1,0 +1,1 @@
+nn1 = v3 search (v2 + node TM) + embedded net1 (256, 5.3M HCE positions). vs v2: +157+-73 (78g, 10+0.1). vs stash30: -89+-66 after 40g. Installed in final/.

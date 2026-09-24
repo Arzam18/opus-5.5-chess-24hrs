@@ -1,0 +1,1 @@
+nn11 = net11 (256, lambda 1.0, 18 ep, all 86.7M NN positions) + nn8h search. vs nn8h: +14.6+-17.8 (500 g 10+0.1, all normal). Installed in final/ 10:10.

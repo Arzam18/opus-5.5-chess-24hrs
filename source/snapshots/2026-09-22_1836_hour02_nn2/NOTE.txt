@@ -1,0 +1,1 @@
+nn2 = same code as nn1, net2 (256) trained on 7.5M HCE + 7.4M nn1 positions. vs nn1: +179+-51 (120g 10+0.1). Installed in final/.

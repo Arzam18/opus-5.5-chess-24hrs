@@ -1,0 +1,1 @@
+v2 = v1 + pawn correction history (+30+-35 vs v1, 200g @5+0.05). src here is v3 (v2 + node-fraction TM, untested) + NNUE code (nnue.cpp, mirrored 768->256x2->8 buckets). net1 = first net on 5.3M HCE positions.

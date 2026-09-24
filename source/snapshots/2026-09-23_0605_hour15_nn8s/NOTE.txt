@@ -1,0 +1,1 @@
+nn8s = net8 (64.9M, 14 ep) + SE margin 1*depth. vs nn7s: +8.3+-19.4 (500 g 10+0.1, all normal). KB4 (nn9kb) -61 after 40 g -> rejected. Installed in final/.

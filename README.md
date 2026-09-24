@@ -1,211 +1,359 @@
-# Chess Engine Benchmark
+# Opus 5.5 chess 24hrs
 
-A coding benchmark for large language models: write a UCI chess engine from
-scratch in 24 hours, unaided, and be judged purely on how well it plays.
+A UCI chess engine written from scratch, in one 24-hour session, by an AI model (**Opus 5.5**, Anthropic),
+working fully autonomously. The final engine is a bitboard/PEXT alpha-beta searcher with an NNUE evaluation
+trained entirely on self-play data generated during the same 24 hours.
 
-Most benchmarks for AI coding ability are either small, well-specified tasks
-or subjective code review. A chess engine is neither. It is a real, open-ended
-piece of software with a brutal, objective score at the end: put the engines on
-a board and see who wins. Strength is measured in Elo, Elo can be compared
-across models and across time, and there is no arguing with a match result.
-This repository is the template for running that test on any model.
+**Final deliverable:** `final/Opus55chess24hrs.exe` (Windows x86-64, AVX2/BMI2, standalone).
+**Best strength estimate:** ≈ **3500 ± 40** on the CCRL-blitz scale at 10+0.1. This is an estimate from matches
+against the Stash calibration engines on one machine; see [Estimated strength](#estimated-strength).
+**Official rating:** **3463 Elo ±16** (95% CI, CCRL Blitz scale), first of six AI engines in the series;
+see [Official results](#official-results).
 
-> **Note:** this README describes the benchmark and lives in the template.
-> When a copy of this folder is used for a run, the model overwrites this
-> file at the end of its 24 hours with its own write-up of the engine it
-> built. The version you are reading survives only here.
+---
 
-The idea owes something to the long-running community projects that have
-produced strong engines over months of work. The question here is narrower:
-what can a model do in a single day, with nobody to ask?
+## What this is
 
-## The task
+This repository is one run of the *24-Hour Chess Engine Benchmark*. The full rules are in [`CLAUDE.md`](CLAUDE.md).
+In short:
 
-The model is pointed at this folder and told to follow `CLAUDE.md`. From that
-moment it has **24 hours of wall-clock time** to design, build, test and
-deliver a chess engine. The rules, in brief:
+- One model (here Opus 5.5) gets **24 hours of wall-clock time**. That covers all thinking, coding, testing,
+  training and writing.
+- It must write a **UCI chess engine from scratch** in C or C++, using only the standard library and compiler intrinsics.
+  Public *documentation* may be used, such as chessprogramming.org and papers. It may not copy source code from existing
+  engines or use any pre-existing network, opening book or tablebase file. Values the model derives itself, including
+  networks trained on its own games, are allowed.
+- The only score is the **playing strength (Elo)** of the executable left in `final/`. It is rated with fastchess
+  at **10+0.1**, single thread, Hash 256 MB, using the UHO opening book, against Stash versions and other engines.
+- Time forfeits, crashes, illegal moves and hangs count as losses. The target is a modern x86-64 Windows 11 laptop
+  (AVX2, BMI2, fast PEXT; no AVX-512), and the executable must be fully standalone.
+- The model must log its progress hourly (`docs/progress.md`) and all internet use (`docs/resources.md`), and keep
+  snapshots so it can roll back (`source/snapshots/`).
 
-- **Fully autonomous.** Nobody watches, nobody answers questions, no hints
-  are given. Ambiguities are the model's to resolve and record.
-- **From scratch.** Public documentation is fair game: chessprogramming.org,
-  papers, published tables such as PeSTO. Copying or adapting source code
-  from an existing engine is not, and neither is using any pre-existing
-  neural network, opening book or endgame file.
-- **C or C++, standard library only**, compiled with GCC. No third-party
-  libraries. Compiler intrinsics are allowed.
-- **Single-threaded UCI engine** that handles the standard commands, prints
-  `info` lines, exposes a `Hash` option, and never crashes, hangs or loses
-  on time. Reliability counts fully: a crash is a loss.
-- **The only thing scored is Elo** at 10 seconds plus 0.1 second increment
-  on a modern Windows laptop. Code quality, documentation and feature count
-  count for nothing.
-- **Time management is part of the test.** The 24 hours covers thinking,
-  reading, coding, compiling, testing and writing. The model decides what to
-  build, what to measure and what to skip, and must keep an hourly log.
+The run started **2026-09-22 16:15:36 −04:00** and ended **2026-09-23 16:15:36 −04:00**. The final build was frozen at 14:52.
 
-The full rules are in [`CLAUDE.md`](CLAUDE.md). It deliberately gives no
-technical guidance on how to build a strong engine.
+## The engine
 
-## What the model gets
-
-Everything a human engine author would reasonably have on their machine,
-and nothing that does the work for them.
-
-| Resource | What it is |
+| | |
 |---|---|
-| `resources/protocol/uci-protocol.md` | The UCI specification |
-| `resources/fastchess/fastchess.exe` | Tournament manager for testing and compliance checks |
-| `resources/fastchess/UHO.pgn` | Unbalanced opening book, 223,070 games, for low-draw testing |
-| `resources/engines/stash-*.exe` | Stash versions 20, 21, 25, 30, 33 and 37, a ladder from about 2500 to 3400 CCRL Blitz |
-| `resources/engines/StashStrength.md` | CCRL ratings of every Stash version |
-| `resources/perft/perft.epd` | 126 perft positions with node counts to depth 6 |
+| Name (`id name`) | `Opus 5.5 chess 24hrs` |
+| Author (`id author`) | `Opus 5.5` |
+| Executable | `final/Opus55chess24hrs.exe` (≈3.7 MB; the network is embedded) |
+| Language | C++17 |
+| Compiler | GCC 15.2.0 (MinGW-w64, via scoop) on Windows 11 |
+| Code size | ≈3,200 lines (engine + trainer) |
 
-The Stash ladder lets the model estimate its own strength during the run:
-a 50% score against a Stash version at 10+0.1 means roughly that version's
-rating.
+**Why C++17:** performance comparable to C, plus convenient standard-library threads, atomics, `std::chrono` and
+containers. These were needed for the UCI input thread, the data generator and the multi-threaded NNUE trainer.
+Intrinsics (`_pext_u64`, AVX2) come straight from GCC.
 
-## What the model must deliver
+### Building
 
-- **`final/<ModelName>chess24hrs.exe`**: a standalone, optimised Windows
-  executable. Whatever is in `final/` when the clock runs out is the entry.
-- **`docs/start_time.txt`**: written the moment the run starts; it defines the
-  deadline and lets the model resume if its context is reset.
-- **`docs/progress.md`**: an hourly log of what was done, what works, the
-  current Elo estimate and the plan for the next hour, plus the time the
-  engine first passed the perft suite and first played a full game.
-- **`docs/resources.md`**: a log of every internet resource the model
-  consulted during the run, with the time, the URL and what it took from
-  it. An empty file means it used none.
-- **`README.md`**: written only after the deadline, covering the engine's
-  architecture, how the time was spent, an Elo-by-hour table, every
-  assumption made and the model's own estimate of its strength.
-- **`source/`**: all source, build scripts, test scripts and tuning data.
+From `source/`, in a MinGW/Git-bash shell:
 
-## How the engines are rated
-
-After the run, the executable is rated by the benchmark operator in a
-separate rating project, never by the model itself.
-
-- fastchess, **10 s + 0.1 s**, one thread, 64 MB hash, `timemargin 200`.
-- UHO 8-ply openings in random order, each played with both colours.
-- A gauntlet against anchor engines whose ratings are fixed at their CCRL
-  Blitz values, chosen to sit within about 250 Elo of the engine under test,
-  plus a round robin among all the AI engines in the series.
-- An anchored maximum-likelihood Elo fit over every game, reported with a
-  95% confidence interval.
-
-Ratings are quoted on the **CCRL Blitz scale under 10+0.1 conditions**.
-They are not CCRL ratings. Fitting the anchors freely shows the Stash ladder
-stretching by about 10% at this time control and on this hardware, so each
-engine is rated only against anchors near its own level to keep that effect
-small.
-
-## Results so far
-
-Four Claude models have taken the test. All four engines were rated in a
-single 3,800-game run on 2 September 2026.
-
-| Engine | Model | Elo | 95% CI | Score | Repository |
-|---|---|---:|:---:|---:|---|
-| Fable 5.1 chess 24hrs | Claude Fable 5.1 | **3277** | ±23 | 56.2% | [fable51-chess-24hrs](https://github.com/stevemaughan/fable51-chess-24hrs) |
-| Opus 5 chess 24hrs | Claude Opus 5 | **3242** | ±23 | 51.5% | [opus5-chess-24hrs](https://github.com/stevemaughan/opus5-chess-24hrs) |
-| Fable 5 chess 24hrs | Claude Fable 5 | **3049** | ±22 | 48.8% | [fable5-chess-24hrs](https://github.com/stevemaughan/fable5-chess-24hrs) |
-| Sonnet 5 chess 24hrs | Claude Sonnet 5 | **2702** | ±26 | 31.4% | [sonnet5-chess-24hrs](https://github.com/stevemaughan/sonnet5-chess-24hrs) |
-
-Each repository holds the full source, the hourly progress log, a README the
-model wrote after the deadline, and a release with the executable.
-
-### Head-to-head among the AI engines
-
-Scores are for the row engine against the column engine, 100 games each.
-
-| | Fable 5.1 | Opus 5 | Fable 5 | Sonnet 5 |
-|---|:---:|:---:|:---:|:---:|
-| **Fable 5.1** | | 63.5% | 80.0% | 98.5% |
-| **Opus 5** | 36.5% | | 79.0% | 98.5% |
-| **Fable 5** | 20.0% | 21.0% | | 87.5% |
-| **Sonnet 5** | 1.5% | 1.5% | 12.5% | |
-
-### How fast they got going
-
-Each model logged when it first passed the full perft suite and when its
-engine first played a complete game.
-
-| Engine | Perft suite passed | First full game |
-|---|---:|---:|
-| Sonnet 5 | 6 min | 46 min |
-| Fable 5.1 | 8 min | 15 min |
-| Fable 5 | 9 min | 17 min |
-| Opus 5 | ~40 min | ~45 min |
-
-### Notes on the four runs
-
-**All four chose C++** and bitboards with PEXT sliding-piece attacks, and all
-four built the conventional modern search: iterative deepening, principal
-variation search, transposition table, quiescence, null move, late move
-reductions and a suite of pruning heuristics. The differences lay in
-evaluation, tuning discipline and how the time was spent.
-
-**Fable 5.1** is the outlier. About five and a half hours in it wrote its own
-self-play data generator and an NNUE trainer, neither of which was provided
-or suggested. Its first nets lost heavily to its hand-crafted evaluation.
-By hour ten, after switching to score-only training targets, a net reached
-parity, and it kept iterating: later nets were trained on data generated by
-the previous NNUE engine. The shipped engine carries a 768→384×2 network
-trained on roughly 17 million of its own self-play positions, with the
-weights compiled into the executable and the hand-crafted evaluation kept as
-a fallback option.
-
-**Opus 5** decided at the outset that NNUE was not affordable in 24 hours and
-put the time into a well-tuned hand-crafted evaluation and careful
-measurement of its pruning. It finished 35 Elo behind Fable 5.1 and lost
-their head-to-head 23–27–50.
-
-**Fable 5** kept the whole engine in a single C++ file and chained a long
-series of SPRT-verified improvements. It measured itself at 3030–3045 and was
-rated 3049.
-
-**Sonnet 5** had the fastest perft pass of the four but spent much of the
-first half of its run on reliability, including a crash traced to running the
-search on a spawned thread under MinGW. It finished at 2702, close to its own
-estimate of 2720–2730.
-
-Every model's self-estimate landed within its stated uncertainty of the
-measured rating. None of the four engines lost a game on time, disconnected
-or played an illegal move in the 3,800-game rating run.
-
-## Running the benchmark on a new model
-
-1. Copy this folder to a new location, one copy per run. Do not reuse a
-   folder: the presence of `docs/start_time.txt` tells the model it is
-   resuming, not starting.
-2. Make sure GCC (MinGW-w64) is on the PATH and the machine has the CPU
-   features listed in `CLAUDE.md`. Note the physical core count.
-3. Open the folder with the model's agent tooling and tell it to read and
-   follow `CLAUDE.md`. An `AGENTS.md` is included for tools that look for
-   that name instead. The model is told to ignore this README during the
-   run and replace it with its own after the deadline.
-4. Walk away. Do not answer questions. If the tool's context resets, restart
-   it in the same folder; the instructions cover resuming.
-5. After 24 hours, take the executable from `final/` and rate it against
-   anchor engines as described above. Fill in the "Official results" section
-   of the model's README.
-
-## Repository layout
-
-```
-CLAUDE.md          the benchmark instructions the model follows
-AGENTS.md          one-line pointer to CLAUDE.md for other agent tools
-README.md          this file (for humans); replaced by the model's own README at the end of a run
-resources/         read-only inputs, described above
+```bash
+# final engine (net embedded via .incbin)
+EXTRA_FLAGS="-DEMBED_NET=nets/net13.nnue" bash build.sh build/Opus55chess24hrs.exe
 ```
 
-## Acknowledgements
+`build.sh` runs:
 
-- [Stash](https://gitlab.com/mhouppin/stash-bot) by Morgan Houppin, whose
-  numbered releases make an ideal calibration ladder.
-- [fastchess](https://github.com/Disservin/fastchess) for tournament
-  management and the UCI compliance checker.
-- The [UHO opening book](https://www.sp-cc.de/uho_2024.htm) by Stefan Pohl.
-- [CCRL](https://www.computerchess.org.uk/ccrl/404/) for the anchor ratings.
-- Crafty and Juggernaut served as additional anchors in the rating runs.
+```
+g++ -std=c++17 -O3 -march=x86-64-v3 -mtune=znver4 -flto -flto-partition=one -DNDEBUG -static -fno-exceptions \
+    -DEMBED_NET=nets/net13.nnue -o <out> src/main.cpp src/position.cpp src/bitboard.cpp src/search.cpp \
+    src/eval.cpp src/perft.cpp src/bench.cpp src/datagen.cpp src/nnue.cpp -lpthread
+```
+
+The build targets `x86-64-v3` (AVX2/BMI2/POPCNT) and is linked statically, so it depends only on `KERNEL32.dll` and
+`msvcrt.dll`. The NNUE trainer is built separately:
+`g++ -O3 -march=native -std=c++17 -static -o build/train.exe trainer/train.cpp`.
+The final network file is `source/nets/net13.nnue`; a copy is also in the final snapshot.
+
+### Running
+
+It's a normal UCI engine: point any UCI GUI or fastchess at the executable. There are also extra command-line modes:
+
+```
+Opus55chess24hrs.exe bench [depth]                  # fixed-depth node-count benchmark
+Opus55chess24hrs.exe perftsuite <perft.epd> [depth]  # move-generator verification
+Opus55chess24hrs.exe datagen <out.bin> <games> <nodes> <seed>   # self-play training data
+```
+
+Non-standard interactive commands: `d` (print FEN), `eval`, `perft N`, `loadnet <file>`.
+
+### UCI options
+
+| Option | Type | Default | Notes |
+|---|---|---|---|
+| `Hash` | spin | 256 | TT size in MB (1–65536) |
+| `Threads` | spin | 1 | fixed at 1 (single-threaded search) |
+| `Move Overhead` | spin | 30 | ms reserved per move for GUI/IO latency |
+| `Clear Hash` | button | | |
+
+## Architecture and features
+
+### Board and move generation
+
+- Bitboards with **PEXT sliding attacks** (`_pext_u64`), plus precomputed pawn/knight/king, between and line tables.
+- Mailbox board array alongside the bitboards; make/unmake with a state stack. Zobrist keys cover position, pawns+kings
+  and the non-pawn pieces per side.
+- Pseudo-legal generation (staged: captures and queen promotions, then quiets and under-promotions), followed by a cheap
+  legality check using precomputed pinned pieces and checkers. Castling legality is checked at generation time.
+- **Perft:** all 126 positions of the supplied suite match at depths 1–6 (756/756). That was 6 minutes into the run.
+- Static exchange evaluation (swap algorithm with x-rays).
+
+### Search
+
+Iterative deepening with aspiration windows (δ = 12, widening ×1.5) and a PVS/negamax alpha-beta core. Features:
+
+- **Transposition table:** 32-byte clusters of three 10-byte entries, depth/age replacement, stores the static eval,
+  mate-distance adjusted.
+- **Quiescence:** captures and queen promotions, SEE and delta pruning, TT probing; all evasions when in check.
+- **Pruning:** reverse futility (75·depth, improving-aware), razoring, null move (R = 4 + d/3 + eval term, verified at
+  depth ≥ 12), ProbCut, late-move pruning ((5 + d²)/(2 − improving)), futility pruning, history pruning, and SEE pruning
+  of quiets and captures. Mate-distance pruning.
+- **Reductions/extensions:** log-log LMR table (1.0 + ln d · ln m / 2.0) adjusted by PV/cut-node/improving/history/killer
+  status; internal iterative reduction; singular extensions (depth ≥ 6, margin 1·depth) with double and negative
+  extensions; check extension.
+- **Move ordering:** TT move; captures by MVV plus capture history (bad SEE captures last); two killers; countermove;
+  quiets by butterfly history plus 1-, 2- and 4-ply continuation histories (gravity-style updates; bonus 300·d − 150,
+  capped at 2400).
+- **Pawn-structure correction history:** the static eval is corrected by a learned per-pawn-structure offset
+  (+30 Elo when added).
+- Repetition detection (2-fold inside the tree, 3-fold before the root), 50-move rule, insufficient-material draws,
+  and eval damping as the 50-move counter grows.
+
+### Evaluation (NNUE)
+
+- Architecture: **(768 → 256) × 2 perspectives → SCReLU → 8 output buckets** (by piece count).
+- Inputs are mirrored horizontally so each side's own king is always on files a–d.
+- Quantised to int16 (QA = 255, QB = 64); AVX2 inference; accumulators updated lazily and incrementally, with a full
+  refresh when a king crosses the d/e boundary.
+- Trained **from scratch in-session** by a custom multi-threaded C++ trainer (`source/trainer/train.cpp`): Adam,
+  cosine learning rate, batch 16384. The target is `sigmoid(eval/400)` fitted to λ·sigmoid(search score/400) +
+  (1−λ)·game result.
+- **Training data** was all self-play generated in-session: about 7.5M positions from the first handcrafted-eval
+  engine, then 86.7M positions from successive NNUE generations. Each game started with 8–9 random plies, used 5,000
+  nodes per move, and was adjudicated on large scores or long quiet draws. Positions in check or with a tactical best
+  move were skipped.
+- The final net (`net13`) was trained for 40 epochs on all 86.7M NNUE-generated positions with λ = 1.0.
+- The initial handcrafted evaluation (PeSTO tables + bishop pair + tempo) is still in the code as a fallback,
+  but is not used by the final build.
+
+### Time management
+
+- Soft/hard limits, where usable time = T + 0.9·inc·(mtg − 1) − overhead·(mtg + 2), with mtg = 25. Reserving the
+  overhead for every remaining move means the engine never spends more than increment minus latency when its clock
+  is low.
+- The clock starts when `go` is received. The hard limit is capped at a fraction of the remaining time.
+- Soft limit scaled by best-move stability, score drops and the share of nodes spent on the best move.
+- Stress tests after the fix: 0 time forfeits at 2+0.02 and 1+0.01. Before the fix, 9 of 20 games at 2+0.02 were
+  lost on time by 1–6 ms.
+
+### UCI / robustness
+
+- A dedicated search thread, with stdin read on the main thread. `stop`, `isready` and `quit` work during search.
+- Always outputs a `bestmove`, including `0000` in mate/stalemate positions.
+- The last `info` PV always starts with the reported best move.
+- Passes `fastchess --compliance`.
+
+### Deliberately left out
+
+- **Multi-threading, pondering, tablebases, opening book:** not required or not allowed.
+- **Larger networks:** a 512-wide hidden layer lowered validation loss but lost about 9–24 Elo in games, because it
+  is about 12–20% slower and fits search-score noise.
+- **King-bucketed inputs (4 buckets):** also lower loss but −55 and −61 Elo in two separate trials.
+- **Non-pawn correction history, several search-parameter variants, PGO and `-funroll-loops`:** measured and rejected.
+
+## How the time was spent
+
+| Elapsed | What happened |
+|---|---|
+| 0:00–0:20 | Bitboards, PEXT, movegen, perft (full suite passed at 0:06), PeSTO eval, full search, UCI. **v1 in `final/` at 0:16** (≈2950: 81.5% vs stash-21). |
+| 0:20–1:00 | Data generator + NNUE inference + trainer written; datagen started on 9–12 processes; correction history (+30). |
+| 1:00–2:30 | net1 on 5.3M positions → **+158 vs HCE**; installed (≈3150 vs stash-30). Datagen switched to NNUE engine. |
+| 2:30–4:00 | net2 (+179), λ experiments: λ=0.5 −124, **λ=0.9 +144** → nn3b. |
+| 4:00–6:00 | λ=1.0 (+28); 512 hidden rejected; dropping HCE data + λ=1.0 → nn5a (+62 in RR). |
+| 6:00–9:00 | nn5a calibrated ≈3420 vs stash-37. Search-parameter gauntlets (LMR adopted); NN gains start to saturate. |
+| 9:00–11:00 | **Time-management robustness fix** (low-clock forfeits found in stress tests). net7 (+44). |
+| 11:00–15:00 | Gauntlets 3–6: LMP, SE depth/margin, aspiration, history bonus adopted (each +10 to +28). net8 (+8). KB4 re-test rejected. |
+| 15:00–18:00 | Gauntlets 7–10, TM horizon, fine-tuning experiments; mostly neutral. nn8h calibrated ≈3480. net11 (all 86.7M, 18 epochs) +15. |
+| 18:00–20:00 | net12a (26 epochs) +13 → installed and verified. |
+| 20:00–22:40 | net13 (40 epochs): +8 over 900 games (LOS 83%), then +4 pooled over 1,400 games. Same code, only the net differs, so installed on expected value → **final build** (frozen 14:52 local, re-verified). README written. |
+
+**Measured vs. judgement:**
+- Every network change, every search/time parameter change and the final build were measured in game matches
+  (typically 300–1,200 games per decision at 5+0.05 or 10+0.1).
+- Accepted on reasoning with only small confirmation: node-fraction time management (+44 in 80 games), the PV-printing
+  fix, and insufficient-material draws.
+
+**What went wrong / was cut:**
+- The first time-management formula was vulnerable to per-move GUI latency at very low clock times. Stress tests
+  caught it at 9 hours; fixed.
+- Validation loss turned out to be a poor predictor of playing strength (larger and king-bucketed nets).
+- NN gains per retrain shrank from ~+150 to ~+10 once the data came from roughly 3400-level engines.
+- The `Hour N` labels in `docs/progress.md` drifted from true elapsed hours after about hour 8. A note in the log
+  explains this, and the table below uses true elapsed time.
+
+## Elo by hour
+
+Estimates on the CCRL-blitz scale from `docs/progress.md`. They are anchored on Stash matches where available
+(stash-21 ≈ 2710, stash-30 ≈ 3170, stash-33 ≈ 3286, stash-37 ≈ 3424) and interpolated along self-play results in between.
+
+| Hour (elapsed) | Local time | Build in `final/` | Estimated Elo | Evidence |
+|---|---|---|---|---|
+| 0 | 2026-09-22 16:15 | — | not yet measurable | |
+| 1 | 17:15 | v1 (PeSTO) | ≈2950 | vs stash-21: 81.5% (100 g) |
+| 2 | 18:15 | nn1 | ≈3150 | vs stash-30: 49% (100 g) |
+| 3 | 19:15 | nn2 | ≈3290 | vs stash-33: 50.5% (100 g) |
+| 4 | 20:15 | nn3b | ≈3340 | self-play chain |
+| 5 | 21:15 | nn3b | ≈3340 | self-play chain |
+| 6 | 22:15 | nn4a | ≈3370 | self-play chain |
+| 7 | 23:15 | nn5a | ≈3420 | vs stash-37: 49.6% (120 g) |
+| 8 | 00:15 | nn5a | ≈3420 | |
+| 9 | 01:15 | tm2 | ≈3425 | vs nn5a +5 (300 g) |
+| 10 | 02:15 | tm2 | ≈3425 | |
+| 11 | 03:15 | nn7 | ≈3440 | vs tm2 +44 (240 g); anchored by later stash-37 runs |
+| 12 | 04:15 | nn7s | ≈3450 | vs nn7 +16 (270 g) |
+| 13 | 05:15 | nn7s | ≈3450 | |
+| 14 | 06:15 | nn8s | ≈3460 | vs stash-37: 55.8% (120 g) |
+| 15 | 07:15 | nn8s | ≈3460 | |
+| 16 | 08:15 | nn8h | ≈3480 | vs stash-37: 57.75% (200 g) |
+| 17 | 09:15 | nn8h | ≈3480 | |
+| 18 | 10:15 | nn11 | ≈3495 | vs nn8h +15 (500 g); vs stash-37 63% (100 g) |
+| 19 | 11:15 | nn11 | ≈3495 | |
+| 20 | 12:15 | nn12a | ≈3500 | vs nn11 +13 (500 g); vs stash-37 60% (100 g) |
+| 21 | 13:15 | nn12a | ≈3500 | |
+| 22 | 14:15 | nn12a | ≈3500 | |
+| 23 | 15:15 | nn13 (final, frozen 14:52) | ≈3505 | vs nn12a +4 (1,400 g) |
+| 24 | 16:15 | nn13 (final) | ≈3505 | |
+
+## All assumptions made
+
+- **Identity:** model name "Opus 5.5" → engine `Opus 5.5 chess 24hrs`, author `Opus 5.5`, exe `Opus55chess24hrs.exe`.
+- **CPU budget:** "up to physical cores − 2 (= 10) for testing" was read as the fastchess `-concurrency` limit, which
+  was always ≤ 10. Self-play data generation and NN training ran on additional hardware threads (the machine has 16
+  logical CPUs), so total CPU use was sometimes above 10 cores.
+- **Hardware:** development machine i7-1260P (4 performance + 8 efficiency cores). Concurrent test games land on both
+  core types; self-play comparisons stay fair, and Stash ladder estimates are somewhat noisy.
+- **Unknown fastchess `timemargin`:** assumed it may be 0. Hence Move Overhead 30 ms reserved per remaining move,
+  the clock started at `go` receipt, and stress tests at 2+0.02 and 1+0.01.
+- **Training data provenance:** networks trained on positions from the engine's own self-play games (random-ply openings)
+  count as "values derived in this session". The UHO book was used only for test matches, never for data generation.
+- **PeSTO tables:** used from memory as published documentation (chessprogramming.org) for the initial HCE only. No
+  internet resources were fetched during the run (see `docs/resources.md`).
+- **Hash:** default set to 256 MB to match the rating conditions. Threads fixed at 1.
+- **Ponder:** not supported. `go ponder` searches until `stop`, and `ponderhit` stops and returns a move.
+- **README timing:** written after the final build was installed and frozen (no further engine changes), as the rules allow.
+
+## Estimated strength
+
+**Best estimate: ≈ 3500 CCRL-blitz-equivalent, uncertainty about ±40 (1σ-ish), more in the absolute sense.**
+
+Evidence (all at 10+0.1, Hash 256, UHO book with colour-reversed pairs, fastchess, this machine):
+
+| Engine | Opponent | Games | Score | Elo diff |
+|---|---|---|---|---|
+| nn12a (final − ≈4) | stash-37 (≈3424) | 100 | 60.0% (+39 −19 =42) | +70 ± 46 |
+| nn11 (final − ≈17) | stash-37 | 100 | 63.0% | +92 ± 49 |
+| nn8h (final − ≈32) | stash-37 | 200 | 57.75% | +54 ± 36 |
+| nn5a (earlier build) | stash-37 | 120 | 49.6% | −3 ± 49 |
+
+Caveats:
+- The Stash ratings are CCRL ratings at longer time controls.
+- UHO openings, the 10+0.1 control and a hybrid-core machine all shift results.
+- Self-play gains between versions usually overstate gains against other engines.
+- The final rating pool also contains engines other than Stash.
+
+A reasonable range for the official result is roughly 3400–3550.
+
+## Official results
+
+Rated by the benchmark operator on 23 September 2026 in 2,020 games, added to the series'
+existing rating dataset (7,140 games in total across all six engines).
+
+**Opus 5.5 chess 24hrs: 3463 Elo ±16 (95% CI), CCRL Blitz scale**, from 2,020 games
+(+681 =652 −687, 49.9% score). That is first in the series, about 200 Elo above Fable 5.1.
+
+The in-session estimate of ≈3500 was close but slightly high. Measured only against the anchor
+engines, Opus 5.5 rates about **3448 ±18**. Its games against the other AI engines imply more
+(about 3580, since it scored 86% against both Fable 5.1 and Opus 5), and those games pull the
+combined fit up to 3463. The ±16 is statistical only and does not cover that gap, so
+"about 3450–3465" is the fairest summary.
+
+### How the rating was measured
+
+- Tool: fastchess 1.8.2, time control **10 s + 0.1 s**, one thread, **64 MB hash**,
+  `timemargin 200`. (The development runs used Hash 256.)
+- Openings: UHO unbalanced 8-ply book, random order, every opening played with
+  both colours.
+- Adjudication: resign after 3 moves at ±600 cp (two-sided); draw after move 40
+  when 8 consecutive moves stay within ±20 cp; 250-move cap. `-recover` on.
+- Format: a 72-game pilot showed Opus 5.5 was stronger than Stash 37, the top of the Stash
+  ladder, so eight stronger anchors were added from the live CCRL Blitz list. Opus 5.5 then
+  played two gauntlets against nine anchors (1,600 games), plus 420 games against Fable 5.1,
+  Opus 5 and Astra 6. Ratings come from an anchored maximum-likelihood Elo fit over all
+  7,140 games in the series.
+- Hardware: AMD Ryzen AI 9 HX 375 laptop, one game per physical core
+  (12 concurrent games).
+- Anchors (CCRL Blitz): Stash 37 (3424), Marvin 6.3.0 (3458), Leorik 3.2 (3490),
+  Tucano 12.00 (3491), Carp 3.0.1 (3525), Sirius 9.0 (3528), Patricia 5.0 (3539),
+  Elixir 3.0 (3567), Motor 0.9.0 (3695). The older engines in the series were rated against
+  Stash 20 to Stash 37, Juggernaut and Crafty.
+- No time losses, crashes, disconnects or illegal moves in any of Opus 5.5's games.
+
+### Head-to-head
+
+Opponent ratings in parentheses are the other AI engines' fitted values
+from this run; the rest are fixed CCRL Blitz anchors. "Implied Elo" is
+the rating this single match alone would give.
+
+| Opponent | Rating | W | D | L | Score | Implied Elo |
+|---|---:|---:|---:|---:|---:|---:|
+| Motor 0.9.0 | 3695 | 3 | 26 | 131 | 10.0% | 3313 |
+| Elixir 3.0 | 3567 | 20 | 66 | 74 | 33.1% | 3445 |
+| Patricia 5.0 | 3539 | 36 | 59 | 105 | 32.8% | 3414 |
+| Sirius 9.0 | 3528 | 49 | 70 | 81 | 42.0% | 3472 |
+| Carp 3.0.1 | 3525 | 41 | 62 | 57 | 45.0% | 3490 |
+| Tucano 12.00 | 3491 | 46 | 90 | 64 | 45.5% | 3460 |
+| Leorik 3.2 | 3490 | 26 | 80 | 54 | 41.2% | 3429 |
+| Marvin 6.3.0 | 3458 | 57 | 85 | 58 | 49.8% | 3456 |
+| Stash 37 | 3424 | 64 | 56 | 40 | 57.5% | 3477 |
+| Fable 5.1 chess 24hrs | (3264) | 127 | 23 | 10 | 86.6% | – |
+| Opus 5 chess 24hrs | (3232) | 124 | 26 | 10 | 85.6% | – |
+| Astra 6 chess 24hrs | (3143) | 88 | 9 | 3 | 92.5% | – |
+
+Motor looks mis-scaled at these conditions: this match alone implies 3313, far below every
+other anchor. Leaving Motor out moves the overall rating to 3471.
+
+### Benchmark series standings
+
+Fitted together over all 7,140 games. Adding Opus 5.5's lopsided wins lowered the older
+engines by about 10 Elo compared with their earlier published ratings.
+
+| Engine | Elo | 95% CI | Games | Score |
+|---|---:|:---:|---:|---:|
+| **Opus 5.5 chess 24hrs** | **3463** | **±16** | **2020** | **49.9%** |
+| Fable 5.1 chess 24hrs | 3264 | ±20 | 1420 | 52.7% |
+| Opus 5 chess 24hrs | 3232 | ±20 | 1420 | 48.5% |
+| Astra 6 chess 24hrs | 3143 | ±20 | 1420 | 46.1% |
+| Fable 5 chess 24hrs | 3045 | ±21 | 1200 | 47.4% |
+| Sonnet 5 chess 24hrs | 2702 | ±25 | 1200 | 29.5% |
+
+Quote these as "CCRL Blitz scale, 10+0.1 conditions", not as CCRL ratings.
+
+---
+
+### Repository layout
+
+```
+final/Opus55chess24hrs.exe         the rated engine
+source/src/                        engine source (position, movegen, search, nnue, uci, datagen, bench, perft)
+source/trainer/train.cpp           NNUE trainer
+source/nets/                       trained networks (net13.nnue = final)
+source/snapshots/                  dated snapshots of every installed build (source + exe + net + note)
+source/tests/                      test outputs (fastchess logs/PGNs of all matches were kept locally; *.log/*.pgn are git-ignored)
+(source/data/ — the 2.9 GB of self-play training data — was deleted after the run; regenerate with `datagen`)
+source/build.sh, match.ps1, verify_final.ps1
+docs/progress.md                   hourly log;  docs/resources.md  external resources (none fetched)
+```

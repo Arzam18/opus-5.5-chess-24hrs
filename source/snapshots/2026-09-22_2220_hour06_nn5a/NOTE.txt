@@ -1,0 +1,1 @@
+nn5a = net5a (256, lambda 1.0, nn1+nn2+nn3 data 32.4M, no HCE data). RR @10+0.1 ~122g each: nn5a +62, nn5b(KB4) +14, nn4a -78. Installed in final/.

@@ -1,0 +1,1 @@
+nn8h = net8 + hist bonus 300*d-150 cap 2400 (other params as nn8s). Gauntlet7 @10+0.1 (212 g each vs nn8s): nn8h 54.0% (+28+-28), nn10 (net10+hb300) 51.7%. Installed in final/. Src also has P_CHECK_SEE/P_DE_MARGIN/P_CAP_LMR knobs (defaults = old behaviour).
