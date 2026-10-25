@@ -1,0 +1,59 @@
+name: Build Opus 5.5 Android ARM64
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "source/src/**"
+      - "source/build.sh"
+      - ".github/workflows/android.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+
+      - name: Build ARM64-v8a with NEON
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd source
+          CXX="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
+          test -x "$CXX"
+          mkdir -p build
+          EXTRA=""
+          if [[ -f nets/net13.nnue ]]; then
+            EXTRA="-DEMBED_NET=nets/net13.nnue"
+            echo "Compatible net13.nnue found: embedding NNUE."
+          else
+            echo "::warning::source/nets/net13.nnue is missing. Building without embedded NNUE; engine will use its handcrafted evaluation fallback."
+          fi
+          "$CXX" -std=c++17 -O3 -DNDEBUG -fno-exceptions \
+            -march=armv8-a+simd -mtune=generic -fPIC -ffunction-sections -fdata-sections \
+            -Wl,--gc-sections -Wl,-z,max-page-size=16384 -static-libstdc++ \
+            ${EXTRA:+$EXTRA} \
+            -o build/Opus55chess24hrs-android-arm64 \
+            src/main.cpp src/position.cpp src/bitboard.cpp src/search.cpp \
+            src/eval.cpp src/perft.cpp src/bench.cpp src/datagen.cpp src/nnue.cpp \
+            -pthread
+          file build/Opus55chess24hrs-android-arm64
+          readelf -h build/Opus55chess24hrs-android-arm64 | grep -E 'Class:|Machine:'
+          readelf -d build/Opus55chess24hrs-android-arm64 | grep NEEDED || true
+
+      - name: Upload ARM64 engine
+        uses: actions/upload-artifact@v4
+        with:
+          name: Opus55chess24hrs-Android-arm64-v8a
+          path: source/build/Opus55chess24hrs-android-arm64
+          if-no-files-found: error
+          retention-days: 30
