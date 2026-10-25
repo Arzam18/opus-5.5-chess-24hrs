@@ -18,7 +18,7 @@ static const size_t NET_BYTES = sizeof(L1W) + sizeof(L1B) + sizeof(L2W) + sizeof
 #ifdef EMBED_NET
 #define STR2(x) #x
 #define STR(x) STR2(x)
-asm(".section .rdata,\"dr\"\n"
+asm(".section .rodata\n"
     ".balign 64\n"
     ".global gEmbeddedNet\n"
     "gEmbeddedNet:\n"

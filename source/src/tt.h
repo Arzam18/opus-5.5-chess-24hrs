@@ -89,13 +89,14 @@ private:
         return p;
     }
     static void *_aligned_malloc_wrapper(size_t sz) {
-        // 64-byte aligned via std::aligned_alloc equivalent on mingw
+        // Portable 64-byte alignment for Android/Linux as well as desktop builds.
         void *p = nullptr;
-        p = _mm_malloc(sz, 64);
+        if (posix_memalign(&p, 64, sz) != 0)
+            return nullptr;
         return p;
     }
     static void free(void *p) {
-        if (p) _mm_free(p);
+        std::free(p);
     }
 };
 
