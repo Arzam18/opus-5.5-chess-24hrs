@@ -25,8 +25,8 @@ struct PextEntry {
 extern PextEntry RookPext[64];
 extern PextEntry BishopPext[64];
 
-inline U64 rook_attacks(int s, U64 occ) { return RookPext[s].attacks[_pext_u64(occ, RookPext[s].mask)]; }
-inline U64 bishop_attacks(int s, U64 occ) { return BishopPext[s].attacks[_pext_u64(occ, BishopPext[s].mask)]; }
+inline U64 rook_attacks(int s, U64 occ) { return RookPext[s].attacks[ENGINE_PEXT(occ, RookPext[s].mask)]; }
+inline U64 bishop_attacks(int s, U64 occ) { return BishopPext[s].attacks[ENGINE_PEXT(occ, BishopPext[s].mask)]; }
 inline U64 queen_attacks(int s, U64 occ) { return rook_attacks(s, occ) | bishop_attacks(s, occ); }
 
 inline U64 attacks_bb(int pt, int s, U64 occ) {

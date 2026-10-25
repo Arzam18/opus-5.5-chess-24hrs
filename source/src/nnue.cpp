@@ -1,6 +1,9 @@
 #include "nnue.h"
 #include <cstdio>
 #include <vector>
+#if defined(__x86_64__) || defined(__i386__)
+#include <immintrin.h>
+#endif
 
 bool g_nnueLoaded = false;
 
@@ -114,6 +117,7 @@ static void apply_dirty(const Accumulator &src, Accumulator &dst, const DirtyPie
     }
 }
 
+#if defined(__x86_64__) || defined(__i386__)
 static inline int32_t hsum(__m256i v) {
     __m128i lo = _mm256_castsi256_si128(v), hi = _mm256_extracti128_si256(v, 1);
     __m128i s = _mm_add_epi32(lo, hi);
@@ -121,6 +125,7 @@ static inline int32_t hsum(__m256i v) {
     s = _mm_add_epi32(s, _mm_shuffle_epi32(s, 0xB1));
     return _mm_cvtsi128_si32(s);
 }
+#endif
 
 int nnue_evaluate(Position &pos) {
     int sp = pos.sp;
@@ -156,6 +161,7 @@ int nnue_evaluate(Position &pos) {
 #endif
     int us = pos.stm;
     int bucket = nnue_bucket(popcount(pos.occupied()));
+#if defined(__AVX2__)
     const __m256i zero = _mm256_setzero_si256();
     const __m256i qa = _mm256_set1_epi16(NNUE_QA);
     __m256i sum = _mm256_setzero_si256();
@@ -174,4 +180,20 @@ int nnue_evaluate(Position &pos) {
     int64_t out = hsum(sum);
     out = out / NNUE_QA + L2B[bucket];
     return (int)(out * NNUE_SCALE / (NNUE_QA * NNUE_QB));
+#else
+    int64_t out = 0;
+    const int16_t *accs[2] = {a.v[us], a.v[!us]};
+    for (int p = 0; p < 2; ++p) {
+        const int16_t *acc = accs[p];
+        const int16_t *w = &L2W[bucket][p * HIDDEN];
+        for (int i = 0; i < HIDDEN; ++i) {
+            int v = acc[i];
+            if (v < 0) v = 0;
+            if (v > NNUE_QA) v = NNUE_QA;
+            out += (int64_t)v * w[i] * v;
+        }
+    }
+    out = out / NNUE_QA + L2B[bucket];
+    return (int)(out * NNUE_SCALE / (NNUE_QA * NNUE_QB));
+#endif
 }

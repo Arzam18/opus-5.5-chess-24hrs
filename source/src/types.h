@@ -3,9 +3,41 @@
 #include <cstring>
 #include <string>
 #include <cassert>
+#if defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h>
+#endif
 
 typedef uint64_t U64;
+
+// Portable PEXT/PDEP fallbacks. x86 builds can use hardware BMI2; ARM64 uses
+// these scalar implementations unless a dedicated implementation is added.
+inline U64 portable_pext(U64 value, U64 mask) {
+    U64 result = 0, bit = 1;
+    while (mask) {
+        U64 low = mask & (~mask + 1);
+        if (value & low) result |= bit;
+        mask &= mask - 1;
+        bit <<= 1;
+    }
+    return result;
+}
+inline U64 portable_pdep(U64 value, U64 mask) {
+    U64 result = 0, bit = 1;
+    while (mask) {
+        U64 low = mask & (~mask + 1);
+        if (value & bit) result |= low;
+        mask &= mask - 1;
+        bit <<= 1;
+    }
+    return result;
+}
+#if defined(__BMI2__) && (defined(__x86_64__) || defined(__i386__))
+#define ENGINE_PEXT(v,m) _pext_u64((v),(m))
+#define ENGINE_PDEP(v,m) _pdep_u64((v),(m))
+#else
+#define ENGINE_PEXT(v,m) portable_pext((v),(m))
+#define ENGINE_PDEP(v,m) portable_pdep((v),(m))
+#endif
 
 enum Color : int { WHITE = 0, BLACK = 1 };
 enum PieceType : int { PAWN = 0, KNIGHT, BISHOP, ROOK, QUEEN, KING, NO_PT };

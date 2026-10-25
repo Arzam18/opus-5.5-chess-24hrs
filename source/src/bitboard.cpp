@@ -48,7 +48,7 @@ static void init_pext(PextEntry *tab, U64 *storage, const int dirs[4][2]) {
         tab[s].attacks = ptr;
         int n = popcount(mask);
         for (int i = 0; i < (1 << n); i++) {
-            U64 occ = _pdep_u64((U64)i, mask);
+            U64 occ = ENGINE_PDEP((U64)i, mask);
             ptr[i] = slide(s, occ, dirs);
         }
         ptr += (1 << n);
